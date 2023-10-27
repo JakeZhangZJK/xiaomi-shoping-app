@@ -1,0 +1,314 @@
+<template>
+	<view>
+		<!-- #ifdef MP -->
+		<!-- 自定义导航 -->
+		<view class="d-flex a-center" style="height: 90rpx;width: 750rpx;">
+			<!-- 左边 -->
+			<view style="width: 85rpx;" class="d-flex a-center j-center" @click="clickLeft">
+				<text class="iconfont icon-xiaoxi"></text>
+			</view>
+			<!-- 中间 -->
+			<view class="flex-1 bg-light rounded d-flex a-center text-light-muted" style="height: 65rpx;" @click="openSearch">
+				<text class="iconfont icon-sousuo mx-2"></text>
+				智能积木
+			</view>
+			<!-- 右边 -->
+			<view style="width: 85rpx;" class="d-flex a-center j-center" @click="clickRight">
+				<text class="iconfont icon-richscan_icon"></text>
+			</view>
+		</view>
+		<!-- #endif -->
+		<!-- 顶部选项卡 -->
+		<scroll-view scroll-x class="border-bottom scroll-row d-flex a-center" style="height: 44px;" :scroll-into-view="scrollinto"
+		:scroll-with-animation="true" :show-scrollbar="false">
+			<view class="scroll-row-item px-3" @click="changeTab(index)" v-for="(item,index) in tabBars" :key="index"
+			:id="'tab'+index">
+				<text class="font-md" :class="tabIndex === index ? 'main-text-color':''">{{item.name}}</text>
+			</view>
+		</scroll-view>
+		
+		 
+		<swiper :duration="150" :current="tabIndex" :style="'height:'+scrollH+'px;'" @change="onChangeTab" >
+			<swiper-item v-for="(item,index) in newsitems" :key="index">
+				<scroll-view scroll-y="true" :style="'height:'+scrollH+'px;'" @scrolltolower="loadmore(index)" :show-scrollbar="false">
+					<!-- #ifdef APP-NVUE -->
+					<refresh class="flex-row j-center a-center"
+					style="height: 80rpx;width: 750rpx;"
+					@refresh="refresh" @pullingdown="pullingdown" 
+					:display="item.refreshShow">
+						<text class="font-md text-muted">{{item.refreshText}}</text>
+					</refresh>
+					<!-- #endif -->
+					<template v-if="item.list.length > 0">
+						<block v-for="(list,listIndex) in item.list" :key="listIndex">
+							<!-- 轮播图组件 -->
+							<swiper indicator-dots autoplay :interval="3000" :duration="200" circular style="height: 350rpx;width: 750rpx;" v-if="list.type === 'swiper'">
+								<swiper-item v-for="(item,index) in list.data" :key="index" @click="clickSwiper(item)">
+									<image :src="item.src" lazy-load style="height: 350rpx;width: 750rpx;"></image>
+								</swiper-item>
+							</swiper>
+							
+							
+							<template  v-else-if="list.type === 'indexnavs'">
+								<!-- 首页分类 -->
+								<index-nav :resdata="list.data" />
+								<divider />
+							</template>
+							
+							<template  v-else-if="list.type === 'threeAdv'">
+								<!-- 三图广告 -->
+								<three-adv :resdata="list.data" />
+								<divider />
+							</template>
+							<!-- 大图广告位 -->
+							<!-- <card :headTitle="list.data.title" :bodyCover="list.data.cover" v-else-if="list.type ==='oneAdv'"/> -->
+							
+							<!-- 公共列表组件 750 - 5 = 745   372.5-->
+							<view class="row j-sb" v-else-if="list.type === 'list'">
+								<block v-for="(item2,index2) in list.data" :key="index2">
+									<common-list :item="item2" :index="index2" />
+								</block>
+							</view>
+							 
+						</block>
+					
+						<!-- 上拉加载更多 -->
+						<divider />
+						<!-- #ifdef APP-NVUE -->
+						<loading class="j-center a-center"
+						style="height: 80rpx;width: 750rpx;"
+						@loading="onLoading" 
+						:display="item.loadingShow">
+							<text class="text-muted font-md">{{item.loadtext}}</text>
+						</loading>
+						<!-- #endif -->
+						<!-- #ifndef APP-NVUE -->
+						<view class="d-flex a-center j-center py-3"><text class="font-md text-light-muted">{{item.loadtext}}</text></view>
+						<!-- #endif -->
+					</template>
+
+					<view v-else-if="item.firstLoad === 'before' || item.firstLoad === 'ing'" class="d-flex j-center a-center pt-5"><text class="font-md text-light-muted">加载中...</text></view>
+					<view v-else class="d-flex j-center a-center pt-5"><text class="font-md text-light-muted">暂无数据</text></view>
+
+				</scroll-view>
+			</swiper-item>
+		</swiper>
+		
+		
+	</view>
+</template>
+
+<script>
+	import indexNav from "@/components/index/index-nav.vue";
+	import threeAdv from "@/components/index/three-adv.vue";
+	import card from "@/components/common/card.vue";
+	import commonList from "@/components/common/common-list.vue";
+	import divider from "@/components/common/divider.vue"
+	import $H from '@/common/lib/request.js';
+	export default {
+		components: {
+			indexNav,
+			threeAdv,
+			card,
+			commonList,
+			divider
+		},
+		data() {
+			return {
+				scrollinto:"",
+				scrollH:500,
+				tabIndex:0,
+				tabBars: [],
+				newsitems:[]
+			}
+		},
+		created() {
+			// 获取可视区域高度
+			let res = uni.getSystemInfoSync()
+			// #ifndef MP
+			let navbarH = 0
+			// #endif
+			// #ifdef MP
+			let navbarH = uni.upx2px(90)  
+			// #endif
+			this.scrollH = res.screenHeight - 88 - 50 -res.statusBarHeight - navbarH
+			// 初始化事件
+			this.__init()
+		},
+		onNavigationBarSearchInputClicked() {
+			uni.navigateTo({
+				url: '../search/search',
+			});
+		},
+		onNavigationBarButtonTap(e) {
+			if(e.index == 0){
+				this.clickLeft()
+			} else {
+				this.clickRight()
+			}
+		},
+		methods: {
+			openSearch(){
+				uni.navigateTo({
+					url: '../search/search',
+				});
+			},
+			// 初始化事件
+			__init(){
+				// 获取顶部选项卡
+				$H.get('/index_category/data').then((res)=>{
+					this.tabBars = res.category
+					// 根据顶部选项卡生成页面
+					let arr = []
+					for (var i = 0; i < this.tabBars.length; i++) {
+						let firstLoad = i === 0 ? 'after' : 'before'
+						let obj = {
+							list:[],
+							// 1.上拉加载更多 2.加载中... 3.没有更多了
+							loadtext:"上拉加载更多",
+							// 首次加载：before加载前，after加载后，ing加载中
+							firstLoad:firstLoad,
+							refreshShow:'hide',
+							refreshText:'下拉可以刷新',
+							loadingShow:'hide',
+						}
+						// 获取首屏数据
+						if (i === 0) {
+							obj.list = res.data
+						}
+						
+						arr.push(obj)
+					}
+					this.newsitems = arr
+				})
+			},
+			// 切换选项卡
+			changeTab(index){
+				if (this.tabIndex === index) {
+					return;
+				}
+				this.tabIndex = index
+				this.scrollinto = 'tab'+index
+				if (this.newsitems[index].firstLoad === 'after') {
+					return;
+				}
+				this.addData()
+			},
+			// 监听滑动列表
+			onChangeTab(e){
+				this.changeTab(e.detail.current)
+			},
+			// 加载数据
+			async addData(callback = false,refresh = false){
+				// 拿到当前索引
+				let index = this.tabIndex
+				let obj = this.newsitems[index]
+				// 拿到当前分类id
+				let id = this.tabBars[index].id
+				// 拿到当前分类的分页数
+				let page = !refresh ? (Math.ceil(obj.list.length/5) + 1) : 1
+				
+				// 请求前
+				if (page === 1 && obj.refreshShow === 'hide') {
+					obj.loadtext = 'ing'
+				}
+				// 请求数据
+				let data = await $H.get('/index_category/'+id+'/data/'+page)
+				
+				// 请求完数据
+				if (page === 1 && obj.refreshShow === 'hide') {
+					obj.firstLoad = 'after'
+				}
+				
+				if (data) {
+					// 赋值
+					obj.list = !refresh ? [...obj.list,...data] : data
+					obj.loadtext = data.length < 5 ? '没有更多了' : '上拉加载更多'
+				}
+				// 执行回调函数
+				if (typeof callback === 'function') {
+					callback()
+				}
+			},
+			// 上拉加载更多
+			loadmore(index){
+				// #ifndef APP-NVUE
+				let item = this.newsitems[index]
+				// 是否处于可加载状态
+				if (item.loadtext !== '上拉加载更多') return;
+				// 模拟加载
+				item.loadtext = '加载中...'
+				
+				this.addData(()=>{
+					uni.showToast({
+						title:'加载成功'
+					})
+				})
+				// #endif
+			},
+			// 上拉加载事件
+			onLoading(){
+				// 存储当前索引
+				var index = this.tabIndex
+				let item = this.newsitems[index]
+				item.loadingShow = 'show';
+				// 没有更多了
+				if (item.loadingText === '没有更多了') {
+					uni.showToast({ title: '没有更多了', icon: 'none' });
+					return item.loadingShow = 'hide';
+				}
+				// 加载数据
+				this.addData(()=>{
+					uni.showToast({ title: '加载成功', icon: 'none' });
+					item.loadingShow = 'hide';
+				});
+			},
+			// 执行刷新
+			refresh(e){
+				// 存储当前索引
+				var index = this.tabIndex
+				this.newsitems[index].refreshShow = 'show';
+				this.newsitems[index].refreshText = '正在刷新...';
+				// 请求刷新数据
+				this.addData(()=>{
+					uni.showToast({ title: '下拉刷新成功',icon:"none" });
+					this.newsitems[index].refreshShow = 'hide';
+					this.newsitems[index].refreshText = '下拉可以刷新';
+				},true)
+			},
+			// 判断下拉刷新状态
+			pullingdown(e){
+				var index = this.tabIndex
+				this.newsitems[index].refreshText = e.pullingDistance > e.viewHeight ? '释放就能刷新咯' : '下拉可以刷新';
+			},
+			clickLeft(){
+				uni.navigateTo({
+					url: '../msg-list/msg-list',
+				});
+			},
+			clickRight(){
+				// #ifndef H5
+				uni.scanCode({
+				    success: (res)=> {
+						uni.showModal({
+							content: `条码内容：${res.result}`,
+							showCancel:false
+						});
+				    }
+				});
+				// #endif
+			},
+			clickSwiper(e){
+				console.log(e);
+				uni.showModal({
+					content: '可以跳转到指定商品详情页，这个自己扩展',
+					showCancel:false
+				});
+			}
+		}
+	}
+</script>
+
+<style>
+
+</style>
